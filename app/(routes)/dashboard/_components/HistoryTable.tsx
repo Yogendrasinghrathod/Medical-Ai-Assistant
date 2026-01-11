@@ -33,7 +33,11 @@ export function HistoryTable({historyList}:Props) {
       <TableBody>
         {historyList.map((record:SessionDetail,index:number) => (
           <TableRow key={index}>
-            <TableCell className="font-medium">{record.selectedDoctor}</TableCell>
+            <TableCell className="font-medium">
+              {typeof record.selectedDoctor === 'string' 
+                ? record.selectedDoctor 
+                : record.selectedDoctor?.specialist || 'Unknown Doctor'}
+            </TableCell>
             <TableCell>{record.notes}</TableCell>
             <TableCell>{ moment(new Date(record.createdOn)).fromNow() }
 </TableCell>

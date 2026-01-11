@@ -16,7 +16,7 @@ export type SessionDetail = {
   notes: string;
   sessionId: string;
   report: JSON;
-  selectedDoctor: doctorAgent;
+  selectedDoctor: doctorAgent | string | null;
   createdOn: string;
 };
 
