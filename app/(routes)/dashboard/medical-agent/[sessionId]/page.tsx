@@ -18,6 +18,11 @@ export type SessionDetail = {
   report: JSON;
   selectedDoctor: doctorAgent | string | null;
   createdOn: string;
+  summary?: string;
+  symptoms?: string[];
+  duration?: string;
+  severity?: string;
+  medications?: string[];
 };
 
 export type messages = {

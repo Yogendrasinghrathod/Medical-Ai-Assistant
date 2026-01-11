@@ -42,7 +42,9 @@ function ViewReportDialog({ record }: Props) {
             <div className="grid grid-cols-2 gap-4 mt-3">
               <p>
                 <span className="font-semibold">Doctor:</span>{" "}
-                {record.selectedDoctor?.specialist}
+                {typeof record.selectedDoctor === 'string' 
+                  ? record.selectedDoctor 
+                  : record.selectedDoctor?.specialist || 'Unknown Doctor'}
               </p>
               <p>
                 <span className="font-semibold">User:</span> Anonymous
