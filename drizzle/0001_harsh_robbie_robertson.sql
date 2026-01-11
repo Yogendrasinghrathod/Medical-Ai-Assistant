@@ -1,0 +1,1 @@
+ALTER TABLE "session_chat" ADD COLUMN "report" text;
