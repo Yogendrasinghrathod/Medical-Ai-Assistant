@@ -109,14 +109,15 @@ function MedicalVoiceAgent() {
   }, []);
 
   const StartCall = () => {
-    const assistantId = sessionDetails?.selectedDoctor.assistantId;
-    if (!vapiRef.current) {
-      console.error("Vapi is not initialized");
-      return;
-    }
-    if (!assistantId) {
+    const selectedDoctor = sessionDetails?.selectedDoctor;
+    if (!selectedDoctor || typeof selectedDoctor === 'string' || !selectedDoctor.assistantId) {
       console.error("VAPI Voice Assistant ID is not set");
       alert("Voice Assistant ID is not configured");
+      return;
+    }
+    const assistantId = selectedDoctor.assistantId;
+    if (!vapiRef.current) {
+      console.error("Vapi is not initialized");
       return;
     }
     try {
