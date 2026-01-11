@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table"
 import { SessionDetail } from "../medical-agent/[sessionId]/page"
 import { Button } from "@/components/ui/button"
-import * as moment from 'moment';
+import moment from 'moment';
 import ViewReportDialog from "@/app/_component/ViewReportDialog";
 
 
