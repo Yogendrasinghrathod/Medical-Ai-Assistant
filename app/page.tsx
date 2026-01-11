@@ -76,7 +76,7 @@ export default function Home() {
             </button>
           </motion.div>
         </Link>
-        <motion.div
+        {/* <motion.div
           initial={{
             opacity: 0,
             y: 10,
@@ -100,7 +100,7 @@ export default function Home() {
               width={1000}
             />
           </div>
-        </motion.div>
+        </motion.div> */}
       </div>
       <FeatureBentoGrid />
     </div>
