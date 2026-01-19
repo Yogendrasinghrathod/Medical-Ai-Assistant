@@ -113,7 +113,7 @@ function MedicalVoiceAgent() {
     };
   }, []);
 
-  const StartCall = () => {
+  const StartCall = async() => {
     const selectedDoctor = sessionDetails?.selectedDoctor;
     if (!selectedDoctor || typeof selectedDoctor === 'string' || !selectedDoctor.assistantId) {
       console.error("VAPI Voice Assistant ID is not set");
@@ -126,6 +126,9 @@ function MedicalVoiceAgent() {
       return;
     }
     try {
+      //here i am starting the voice call with assisstant  so i want to rate limit this 1 min mai 2 bs req 
+      await axios.post("/api/ratelimit/start-call")
+      
       vapiRef.current.start(assistantId);
     } catch (error) {
       console.error("Error starting call:", error);
