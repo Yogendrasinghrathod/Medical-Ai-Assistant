@@ -7,3 +7,9 @@ export const startCallLimiter= new Ratelimit({
     limiter:Ratelimit.slidingWindow(2,"1 m"),
     analytics:true
 })
+
+
+export const userRatelimit = new Ratelimit({
+  redis:Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(5, "60 s"),
+});
