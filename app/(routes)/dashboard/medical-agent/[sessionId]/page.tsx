@@ -37,7 +37,7 @@ function MedicalVoiceAgent() {
   const [currentRole, setCurrentRole] = useState<string | null>();
   const [liveTranscirpt, setLiveTranscript] = useState<string>();
   const [messages, setMessages] = useState<messages[]>([]);
-  const router=useRouter();
+  const router = useRouter();
 
   useEffect(() => {
     const GetSessionDetails = async () => {
@@ -46,10 +46,9 @@ function MedicalVoiceAgent() {
         const result = await axios.get(
           "/api/session-chat?sessionId=" + sessionId
         );
-        console.log(result.data);
         setSessionDetails(result.data);
       } catch (error) {
-        console.error("Error fetching session details:", error);
+        // Error fetching session details
       }
     };
     GetSessionDetails();
@@ -59,7 +58,6 @@ function MedicalVoiceAgent() {
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
     if (!apiKey) {
-      console.error("VAPI API key is not set");
       return;
     }
 
@@ -67,19 +65,16 @@ function MedicalVoiceAgent() {
 
     // Set up event listeners once
     vapiRef.current.on("call-start", () => {
-      console.log("Call started");
       setCallStarted(true);
     });
 
     vapiRef.current.on("call-end", () => {
-      console.log("Call ended");
       setCallStarted(false);
     });
 
     vapiRef.current.on("message", (message: any) => {
       if (message.type === "transcript") {
         const { role, transcriptType, transcript } = message;
-        console.log(`${message.role}: ${message.transcript}`);
         if (transcriptType == "partial") {
           setLiveTranscript(transcript);
           setCurrentRole(role);
@@ -96,11 +91,9 @@ function MedicalVoiceAgent() {
     });
 
     vapiRef.current.on("speech-start", () => {
-      console.log("Assistant started speaking");
       setCurrentRole("Assistant");
     });
     vapiRef.current.on("speech-end", () => {
-      console.log("Assistant stopped speaking");
       setCurrentRole("User");
     });
 
@@ -113,53 +106,49 @@ function MedicalVoiceAgent() {
     };
   }, []);
 
-  const StartCall = async() => {
+  const StartCall = async () => {
     const selectedDoctor = sessionDetails?.selectedDoctor;
     if (!selectedDoctor || typeof selectedDoctor === 'string' || !selectedDoctor.assistantId) {
-      console.error("VAPI Voice Assistant ID is not set");
       alert("Voice Assistant ID is not configured");
       return;
     }
     const assistantId = selectedDoctor.assistantId;
     if (!vapiRef.current) {
-      console.error("Vapi is not initialized");
       return;
     }
     try {
       //here i am starting the voice call with assisstant  so i want to rate limit this 1 min mai 2 bs req 
       await axios.post("/api/ratelimit/start-call")
-      
+
       vapiRef.current.start(assistantId);
     } catch (error) {
-      console.error("Error starting call:", error);
       alert("Failed to start call. Please check your configuration.");
     }
   };
 
-  
-    const GenerateReport = async () => {
-      const result=await axios.post("/api/generate-report",{
-        sessionId:sessionId,
-        sessionDetails,
-        messages:messages
-      })
-      console.log(result.data);
-  
-      return result.data;
-    
-    }
-  const StopCall = async() => {
+
+  const GenerateReport = async () => {
+    const result = await axios.post("/api/generate-report", {
+      sessionId: sessionId,
+      sessionDetails,
+      messages: messages
+    })
+
+    return result.data;
+
+  }
+  const StopCall = async () => {
     if (vapiRef.current) {
       try {
         vapiRef.current.stop();
         setCallStarted(false);
-        const result=await GenerateReport();
+        const result = await GenerateReport();
         // vapiRef.current.off('call-start');
         toast.success("Report is Generated!")
         router.replace('/dashboard');
-        
+
       } catch (error) {
-        console.error("Error stopping call:", error);
+        // Error stopping call
       }
     }
   };
@@ -169,9 +158,8 @@ function MedicalVoiceAgent() {
       <div className="flex justify-between items-center">
         <h2 className="p-1 px-2 border rounded-md flex gap-2 items-center">
           <Circle
-            className={`h-4 w-4 rounded-full ${
-              callStarted ? "bg-green-500" : "bg-red-500"
-            }`}
+            className={`h-4 w-4 rounded-full ${callStarted ? "bg-green-500" : "bg-red-500"
+              }`}
           />
           {callStarted ? "Connected" : "Not Connected"}
         </h2>

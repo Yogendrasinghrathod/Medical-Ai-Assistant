@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
       ? selectedDoctor.specialist || selectedDoctor.id?.toString() || ''
       : selectedDoctor || '';
 
-    console.log('Attempting to insert session:', { sessionId, userEmail, doctorName, notesLength: notes?.length || 0 });
 
     const result = await db
       .insert(SessionChatTable)
@@ -39,23 +38,15 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    console.log('Session created successfully:', result[0]);
+
     return NextResponse.json(result[0]);
   } catch (error) {
-    console.error('Error creating session - Full error:', error);
-    
-    // More detailed error logging
-    if (error instanceof Error) {
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-    
+
     // Check for specific database errors
     let errorDetails = 'Unknown error';
     if (error instanceof Error) {
       errorDetails = error.message;
-      
+
       // Check for common database errors
       if (error.message.includes('relation') && error.message.includes('does not exist')) {
         errorDetails = 'Database table does not exist. Please run migrations.';
@@ -65,15 +56,15 @@ export async function POST(req: NextRequest) {
         errorDetails = 'Database connection failed. Please check your database configuration.';
       }
     }
-    
+
     return NextResponse.json(
-      { 
-        error: 'Failed to create session', 
+      {
+        error: 'Failed to create session',
         details: errorDetails,
         // Include full error in development only
-        ...(process.env.NODE_ENV === 'development' && error instanceof Error && { 
+        ...(process.env.NODE_ENV === 'development' && error instanceof Error && {
           fullError: error.message,
-          stack: error.stack 
+          stack: error.stack
         })
       },
       { status: 500 }
@@ -87,21 +78,29 @@ export async function GET(req: NextRequest) {
   const sessionId = searchParams.get('sessionId');
   const user = await currentUser();
 
-  if(sessionId=='all'){
+  if (sessionId == 'all') {
+    const userEmail = user?.primaryEmailAddress?.emailAddress;
+
+    if (!userEmail) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const result = await db
       .select()
       .from(SessionChatTable)
-      //@ts-ignore
-      .where(eq(SessionChatTable.createdBy, user?.primaryEmailAddress?.emailAddress))
+      .where(eq(SessionChatTable.createdBy, userEmail))
       .orderBy(desc(SessionChatTable.id));
 
-      return NextResponse.json(result);
+    return NextResponse.json(result);
 
-  }else{
-     const result = await db
+  } else {
+    if (!sessionId) {
+      return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
+    }
+
+    const result = await db
       .select()
       .from(SessionChatTable)
-      //@ts-ignore
       .where(eq(SessionChatTable.sessionId, sessionId));
 
     if (result.length === 0) {
@@ -124,48 +123,6 @@ export async function GET(req: NextRequest) {
       ...sessionData,
       selectedDoctor: doctor || null,
     });
-    
-  }
 
-  if (!sessionId) {
-    return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
-  }
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  try {
-    // const result = await db
-    //   .select()
-    //   .from(SessionChatTable)
-    //   .where(eq(SessionChatTable.sessionId, sessionId));
-
-    // if (result.length === 0) {
-    //   return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-    // }
-
-    // // Verify the user owns this session
-    // if (result[0].createdBy !== user.primaryEmailAddress?.emailAddress) {
-    //   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    // }
-
-    // // Find the full doctor object from the stored specialist name
-    // const sessionData = result[0];
-    // const doctor = AIDoctorAgents.find(
-    //   (doc) => doc.specialist === sessionData.selectedDoctor
-    // );
-
-    // // Return session data with full doctor object
-    // return NextResponse.json({
-    //   ...sessionData,
-    //   selectedDoctor: doctor || null,
-    // });
-  } catch (error) {
-    console.error('Error fetching session:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch session' },
-      { status: 500 }
-    );
   }
 }

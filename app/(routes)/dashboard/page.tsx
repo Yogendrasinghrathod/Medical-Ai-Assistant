@@ -1,19 +1,25 @@
 import React from "react";
-import HistoryList from "./_components/HistoryList";
-import DoctorAgentList from "@/app/_component/DoctorAgentList";
-import AddNewSessionDialog from "./_components/AddNewSessionDialog";
+import dynamic from "next/dynamic";
+
+const HistoryList = dynamic(() => import("./_components/HistoryList"), {
+  loading: () => <div className="h-64 bg-slate-200 animate-pulse rounded-xl"></div>,
+});
+const DoctorAgentList = dynamic(() => import("@/app/_component/DoctorAgentList"), {
+  loading: () => <div className="h-64 bg-slate-200 animate-pulse rounded-xl"></div>,
+});
+const AddNewSessionDialog = dynamic(() => import("./_components/AddNewSessionDialog"));
 
 function Dashboard() {
   return (
     <div>
       <div className="flex items-center justify-between">
         <h2 className="font-bold text-2xl ">My Dashboard</h2>
-        <AddNewSessionDialog/>
+        <AddNewSessionDialog />
       </div>
       <HistoryList />
-      <DoctorAgentList/>
+      <DoctorAgentList />
     </div>
-  ); 
+  );
 }
 
 export default Dashboard;

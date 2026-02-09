@@ -1,8 +1,9 @@
 import { db } from "@/src/db";
-import { openai } from "@/src/OpenAIModel";
+import { ai } from "@/src/GeminiModel";
 import { SessionChatTable } from "@/src/schema";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { compressForLLM } from "@/utils/tokenCompressor";
 
 
 const REPORT_GEN_PROMPT = `You are an AI Medical Voice Agent that just finished a voice conversation with a user. Based on the doctor AI Agent  info and Conversation between Ai medical agent and user, generate a structured report with the following fields:
@@ -49,27 +50,51 @@ Only include valid fields. Respond with nothing else.
 export async function POST(req: Request) {
     const { sessionId, sessionDetails, messages } = await req.json();
     try {
-        const UserInput="AI Doctor Agent Info:"+JSON.stringify(sessionDetails)+",Converstaion:"+JSON.stringify(messages);
-        const completion = await openai.chat.completions.create({
-            model: "google/gemini-2.5-flash-preview-05-20",
-            messages: [
-                { role: 'system', content: REPORT_GEN_PROMPT },
-                { role: 'user', content: UserInput }
-            ],
-        });
-      const rawResponse=(completion.choices[0].message);
-    //@ts-expect-error - content may not be defined in type but exists at runtime
-    const Resp=rawResponse.content.trim().replace('```json','').replace('```','')
-    const JSONResp=JSON.parse(Resp);
+        // Prepare raw input
+        const rawInput = "AI Doctor Agent Info:" + JSON.stringify(sessionDetails) + ",Conversation:" + JSON.stringify(messages);
 
-    //save to db
-    await db.update(SessionChatTable).set({
-        report:JSONResp,
-        conversation:messages
-    }).where(eq(SessionChatTable.sessionId,sessionId));
-    return NextResponse.json(JSONResp);
+        // Compress input to save tokens (40-70% reduction)
+        const compressedInput = compressForLLM(rawInput);
+
+        // Log token savings for monitoring
+        // const tokenStats = countTokens(rawInput, compressedInput);
+
+
+
+        const result = await ai.models.generateContent({
+            model: "gemini-1.5-flash",
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        {
+                            text: REPORT_GEN_PROMPT
+                        },
+                        {
+                            text: compressedInput
+                        }
+                    ]
+                }
+            ]
+        });
+
+        const content = result.text;
+
+        if (!content) {
+            throw new Error('No content in Gemini response');
+        }
+
+        const Resp = content.trim().replace('```json', '').replace('```', '');
+        const JSONResp = JSON.parse(Resp);
+
+        //save to db
+        await db.update(SessionChatTable).set({
+            report: JSONResp,
+            conversation: messages
+        }).where(eq(SessionChatTable.sessionId, sessionId));
+        return NextResponse.json(JSONResp);
     } catch (error) {
         console.error("Error generating report:", error);
-        return NextResponse.json(error);
+        return NextResponse.json({ error: "Error generating report" }, { status: 500 });
     }
 }

@@ -26,12 +26,12 @@ async function addReportColumn() {
       ALTER TABLE "session_chat" ADD COLUMN IF NOT EXISTS "report" text;
     `;
     
-    console.log('✅ report column added successfully!');
+    // console.log('✅ report column added successfully!');
   } catch (error: any) {
     if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
-      console.log('✅ report column already exists!');
+      // console.log('✅ report column already exists!');
     } else {
-      console.error('❌ Error adding report column:', error);
+      // console.error('❌ Error adding report column:', error);
       throw error;
     }
   }
@@ -39,10 +39,10 @@ async function addReportColumn() {
 
 addReportColumn()
   .then(() => {
-    console.log('Migration completed!');
+    // console.log('Migration completed!');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('Migration failed:', error);
+    // console.error('Migration failed:', error);
     process.exit(1);
   });

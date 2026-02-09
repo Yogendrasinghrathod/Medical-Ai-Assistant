@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AIDoctorAgents } from "@/shared/list";
-// import { openai } from "@/src/OpenAIModel";
-// import { GoogleGenAI } from "@google/genai";
 
 type doctorAgent = {
   id: number;
@@ -194,46 +192,9 @@ function suggestDoctors(notes: string): doctorAgent[] {
 export async function POST(req: NextRequest) {
   const { notes } = await req.json();
   try {
-    // OpenAI/OpenRouter implementation (commented out due to rate limits)
-    // const completion = await openai.chat.completions.create({
-    //   model: "google/gemini-2.0-flash-exp:free",
-    //   messages: [
-    //     { role: "system", content: JSON.stringify(AIDoctorAgents) },
-    //     {
-    //       role: "user",
-    //       content: "User Notes/Symptoms: " + notes+",Depends on user notes/symptoms,Please suggest list of doctors,Return Object in json only"
-    //     },
-    //   ],
-    // });
-    // const rawResponse=(completion.choices[0].message);
-    // //@ts-ignore
-    // const Resp=rawResponse.content.trim().replace('```json','').replace('```','')
-    // const JSONResp=JSON.parse(Resp)
-    // return NextResponse.json(JSONResp);
-
-    // Gemini API implementation (direct, using GEMINI_API_KEY)
-    // const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-    // const prompt = `You are a medical assistant. Here are the available doctors: ${JSON.stringify(AIDoctorAgents)}
-    
-    // User Notes/Symptoms: ${notes}
-    
-    // Based on the user notes/symptoms, please suggest a list of relevant doctors. Return the response as a JSON array of doctor objects only (no markdown, no code blocks, just the JSON array).`;
-    
-    // const response = await ai.models.generateContent({
-    //   model: "gemini-2.0-flash-exp",
-    //   contents: prompt,
-    // });
-    
-    // const text = response.text || "";
-    // const cleanedText = text.trim().replace(/```json/g, '').replace(/```/g, '').trim();
-    // const JSONResp = JSON.parse(cleanedText);
-    // return NextResponse.json(JSONResp);
-
-    // Local keyword-based implementation (currently active)
     const suggestions = suggestDoctors(notes);
     return NextResponse.json(suggestions);
   } catch (error) {
-    console.error("Error suggesting doctors:", error);
     return NextResponse.json(
       { error: "Failed to suggest doctors" },
       { status: 500 }

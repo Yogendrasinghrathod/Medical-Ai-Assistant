@@ -12,15 +12,15 @@ import { SessionDetail } from "../medical-agent/[sessionId]/page";
 function HistoryList() {
   const [historyList, setHistoryList] = useState<SessionDetail[]>([]);
 
-  
-  const GetHistoryList=async()=>{
-    const result=await axios.get('/api/session-chat?sessionId=all');
-    console.log(result.data);
-    setHistoryList(result.data);
-  }
-  useEffect(()=>{
+
+
+  useEffect(() => {
+    const GetHistoryList = async () => {
+      const result = await axios.get('/api/session-chat?sessionId=all');
+      setHistoryList(result.data);
+    }
     GetHistoryList();
-  },[])
+  }, [])
   return (
     <div className="mt-10">
       {historyList.length == 0 ? (
@@ -33,10 +33,10 @@ function HistoryList() {
           />
           <h2 className="font-bold text-xl mt-5 ">No Recent Consultations</h2>
           <p>It looks like you haven&apos;t consulted any doctor yet</p>
-          <AddNewSessionDialog/>
+          <AddNewSessionDialog />
         </div>
       ) : (
-        <div><HistoryTable historyList={historyList}/></div>
+        <div><HistoryTable historyList={historyList} /></div>
       )}
     </div>
   );

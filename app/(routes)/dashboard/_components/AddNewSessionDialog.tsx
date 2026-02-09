@@ -29,64 +29,59 @@ type doctorAgent = {
 };
 
 function AddNewSessionDialog() {
-    const[note,setNote]=useState<string>();
-    const[loading,setLoading]=useState(false);
-    const[suggestedDoctors,setSuggestedDoctors]=useState<doctorAgent[]>([]);
-    const[selectedDoctor,setSelectedDoctor]=useState<doctorAgent>();
-    const[showDoctors,setShowDoctors]=useState(false);
-    const router=useRouter()
-    const OnClickNext=async()=>{
-      setLoading(true);
-      try {
-        const result=await axios.post('/api/suggest-doctors',{
-          notes:note
-        })
-        console.log(result.data);
-        setSuggestedDoctors(result.data);
-        setShowDoctors(true);
-      } catch (error) {
-        console.error('Error fetching suggested doctors:', error);
-      } finally {
-        setLoading(false);
-      }
+  const [note, setNote] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [suggestedDoctors, setSuggestedDoctors] = useState<doctorAgent[]>([]);
+  const [selectedDoctor, setSelectedDoctor] = useState<doctorAgent>();
+  const [showDoctors, setShowDoctors] = useState(false);
+  const router = useRouter()
+  const OnClickNext = async () => {
+    setLoading(true);
+    try {
+      const result = await axios.post('/api/suggest-doctors', {
+        notes: note
+      })
+      setSuggestedDoctors(result.data);
+      setShowDoctors(true);
+    } catch (error) {
+      // Error fetching suggested doctors
+    } finally {
+      setLoading(false);
+    }
 
-    }
-    const onStartConsultation=async()=>{
-      setLoading(true);
-      try {
-        const result=await axios.post('/api/session-chat',{
-          notes:note,
-          selectedDoctor:selectedDoctor
-        });
-        console.log(result.data)
-        if(result.data?.sessionId){
-          console.log(result.data.sessionId);
-          router.push('/dashboard/medical-agent/'+result.data.sessionId)
-        } else if(result.data?.error){
-          console.error('Error:', result.data.error, result.data.details);
-          const errorMsg = result.data.details 
-            ? `${result.data.error}: ${result.data.details}`
-            : result.data.error || 'Failed to create session. Please try again.';
-          alert(errorMsg);
-        }
-      } catch (error) {
-        console.error('Error creating session:', error);
-        let errorMessage = 'Failed to create session. Please try again.';
-        if (axios.isAxiosError(error)) {
-          const errorData = error.response?.data;
-          if (errorData?.details) {
-            errorMessage = `${errorData.error || 'Error'}: ${errorData.details}`;
-          } else if (errorData?.error) {
-            errorMessage = errorData.error;
-          } else if (error.message) {
-            errorMessage = error.message;
-          }
-        }
-        alert(errorMessage);
-      } finally {
-        setLoading(false);
+  }
+  const onStartConsultation = async () => {
+    setLoading(true);
+    try {
+      const result = await axios.post('/api/session-chat', {
+        notes: note,
+        selectedDoctor: selectedDoctor
+      });
+      if (result.data?.sessionId) {
+        router.push('/dashboard/medical-agent/' + result.data.sessionId)
+      } else if (result.data?.error) {
+        const errorMsg = result.data.details
+          ? `${result.data.error}: ${result.data.details}`
+          : result.data.error || 'Failed to create session. Please try again.';
+        alert(errorMsg);
       }
+    } catch (error) {
+      let errorMessage = 'Failed to create session. Please try again.';
+      if (axios.isAxiosError(error)) {
+        const errorData = error.response?.data;
+        if (errorData?.details) {
+          errorMessage = `${errorData.error || 'Error'}: ${errorData.details}`;
+        } else if (errorData?.error) {
+          errorMessage = errorData.error;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+      }
+      alert(errorMessage);
+    } finally {
+      setLoading(false);
     }
+  }
   return (
     <Dialog>
       <DialogTrigger>
@@ -102,7 +97,7 @@ function AddNewSessionDialog() {
                 <Textarea
                   placeholder="Add Details here..."
                   className="h-[250px] mt-8"
-                  onChange={(e)=>setNote(e.target.value)}
+                  onChange={(e) => setNote(e.target.value)}
                   value={note}
                 />
               </div>
@@ -114,11 +109,10 @@ function AddNewSessionDialog() {
                     <div
                       key={doctor.id}
                       onClick={() => setSelectedDoctor(doctor)}
-                      className={`flex flex-col items-center border rounded-2xl shadow p-4 cursor-pointer transition-all ${
-                        selectedDoctor?.id === doctor.id
+                      className={`flex flex-col items-center border rounded-2xl shadow p-4 cursor-pointer transition-all ${selectedDoctor?.id === doctor.id
                           ? 'border-blue-500 bg-blue-50'
                           : 'hover:border-blue-300'
-                      }`}
+                        }`}
                     >
                       <Image
                         src={doctor.image}
@@ -147,14 +141,14 @@ function AddNewSessionDialog() {
 
           {!showDoctors ? (
             <Button disabled={!note || loading} onClick={OnClickNext}>
-              {loading ? 'Loading...' : 'Next'} <ArrowRight/>
+              {loading ? 'Loading...' : 'Next'} <ArrowRight />
             </Button>
           ) : (
-            <Button 
-              disabled={!selectedDoctor || loading} 
+            <Button
+              disabled={!selectedDoctor || loading}
               onClick={onStartConsultation}
             >
-              {loading ? 'Starting...' : 'Start Consultation'} <ArrowRight/>
+              {loading ? 'Starting...' : 'Start Consultation'} <ArrowRight />
             </Button>
           )}
         </DialogFooter>

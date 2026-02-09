@@ -59,7 +59,6 @@ export async function POST(req: Request) {
             }
         });
     } catch (error) {
-        console.error('Error in users route:', error);
         return NextResponse.json(
             { error: 'Failed to process user request' },
             { status: 500 }
