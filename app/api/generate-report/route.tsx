@@ -1,97 +1,25 @@
 import { db } from "@/src/db";
-import { ai } from "@/src/GeminiModel";
 import { SessionChatTable } from "@/src/schema";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { compressForLLM } from "@/utils/tokenCompressor";
+import { generateMedicalReport } from "@/services/report.service";
 
-
-const REPORT_GEN_PROMPT = `You are an AI Medical Voice Agent that just finished a voice conversation with a user. Based on the doctor AI Agent  info and Conversation between Ai medical agent and user, generate a structured report with the following fields:
-
-sessionId: a unique session identifier
-
-agent: the medical specialist name (e.g., "General Physician AI")
-
-user: name of the patient or "Anonymous" if not provided
-
-timestamp: current date and time in ISO format
-
-chiefComplaint: one-sentence summary of the main health concern
-
-summary: a 2–3 sentence summary of the conversation, symptoms, and recommendations
-
-symptoms: list of symptoms mentioned by the user
-
-duration: how long the user has experienced the symptoms
-
-severity: mild, moderate, or severe
-
-medicationsMentioned: list of any medicines mentioned
-
-recommendations: list of AI suggestions (e.g., rest, see a doctor)
-
-Return the result in this JSON format:
-
-{
-"sessionId": "string",
-"agent": "string",
-"user": "string",
-"timestamp": "ISO Date string",
-"chiefComplaint": "string",
-"summary": "string",
-"symptoms": ["symptom1", "symptom2"],
-"duration": "string",
-"severity": "string",
-"medicationsMentioned": ["med1", "med2"],
-"recommendations": ["rec1", "rec2"]
-} 
-Only include valid fields. Respond with nothing else.
-`
+// Generate Report API Endpoint
+// Now uses the RAG-enhanced report service. If RAG doesn't work, it automatically
+// falls back to the original way so nothing breaks for the user.
 export async function POST(req: Request) {
     const { sessionId, sessionDetails, messages } = await req.json();
     try {
-        // Prepare raw input
-        const rawInput = "AI Doctor Agent Info:" + JSON.stringify(sessionDetails) + ",Conversation:" + JSON.stringify(messages);
+        // Generate report using RAG-enhanced service
+        // This function automatically handles RAG fallback if vector DB is unavailable
+        const JSONResp = await generateMedicalReport(sessionId, sessionDetails, messages);
 
-        // Compress input to save tokens (40-70% reduction)
-        const compressedInput = compressForLLM(rawInput);
-
-        // Log token savings for monitoring
-        // const tokenStats = countTokens(rawInput, compressedInput);
-
-
-
-        const result = await ai.models.generateContent({
-            model: "gemini-1.5-flash",
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        {
-                            text: REPORT_GEN_PROMPT
-                        },
-                        {
-                            text: compressedInput
-                        }
-                    ]
-                }
-            ]
-        });
-
-        const content = result.text;
-
-        if (!content) {
-            throw new Error('No content in Gemini response');
-        }
-
-        const Resp = content.trim().replace('```json', '').replace('```', '');
-        const JSONResp = JSON.parse(Resp);
-
-        //save to db
+        // Save to database
         await db.update(SessionChatTable).set({
             report: JSONResp,
             conversation: messages
         }).where(eq(SessionChatTable.sessionId, sessionId));
+        
         return NextResponse.json(JSONResp);
     } catch (error) {
         console.error("Error generating report:", error);

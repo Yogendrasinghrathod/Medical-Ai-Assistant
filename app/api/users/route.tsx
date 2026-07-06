@@ -1,4 +1,4 @@
-import { userRatelimit } from "@/app/(ratelimiter)/rateLimiter";
+import { applyRateLimit, userRatelimit } from "@/app/(ratelimiter)/rateLimiter";
 import { db } from "@/src/db";
 import { usersTable } from "@/src/schema";
 import { currentUser } from "@clerk/nextjs/server";
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
     const key = user?.id ? `user:${user.id}` : `ip:${ip}`;
 
-    const { success, reset, remaining } = await userRatelimit.limit(key);
+    const { success, reset, remaining } = await applyRateLimit(userRatelimit, key);
 
 
     if (!success) {

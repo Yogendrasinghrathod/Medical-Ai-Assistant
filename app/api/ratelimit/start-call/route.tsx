@@ -1,4 +1,4 @@
-import { startCallLimiter } from "@/app/(ratelimiter)/rateLimiter";
+import { applyRateLimit, startCallLimiter } from "@/app/(ratelimiter)/rateLimiter";
 import { NextResponse } from "next/server";
 
 
@@ -6,7 +6,10 @@ export async function POST(req: Request) {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
-  const { success, reset } = await startCallLimiter.limit(`start_call_${ip}`);
+  const { success, reset } = await applyRateLimit(
+    startCallLimiter,
+    `start_call_${ip}`
+  );
 
   if (!success) {
     return NextResponse.json(
