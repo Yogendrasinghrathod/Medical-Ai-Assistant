@@ -1,4 +1,4 @@
-import { ai, GEMINI_REPORT_MODEL } from '@/src/GeminiModel';
+import { ai, REPORT_MODEL } from '@/src/GeminiModel';
 import { getMedicalContext } from './rag.service';
 import { compressForLLM } from '@/utils/tokenCompressor';
 
@@ -115,74 +115,184 @@ export async function generateMedicalReport(
   messages: any[]
 ): Promise<any> {
   try {
+
     // Prepare conversation transcript
-    const rawInput = "AI Doctor Agent Info:" + JSON.stringify(sessionDetails) + ",Conversation:" + JSON.stringify(messages);
-    
-    // Compress input to save tokens (40-70% reduction)
+    const rawInput =
+      "AI Doctor Agent Info:" +
+      JSON.stringify(sessionDetails) +
+      ",Conversation:" +
+      JSON.stringify(messages);
+
+
+    // Compress input to reduce tokens
     const compressedInput = compressForLLM(rawInput);
 
-    // Try to get medical context using RAG
-    let retrievedContext = '';
+
+    // =========================
+    // RAG Retrieval
+    // =========================
+
+    let retrievedContext = "";
     let useRAG = false;
 
+
     try {
-      // Extract full transcript for RAG
-      const fullTranscript = JSON.stringify(messages);
-      
-      // Get medical context from vector database
-      retrievedContext = await getMedicalContext(fullTranscript);
-      
-      // Use RAG if we got context back
-      if (retrievedContext && retrievedContext.length > 0) {
+
+      const fullTranscript =
+        JSON.stringify(messages);
+
+
+      retrievedContext =
+        await getMedicalContext(fullTranscript);
+
+
+      if (
+        retrievedContext &&
+        retrievedContext.length > 0
+      ) {
+
         useRAG = true;
-        console.log('RAG: Successfully retrieved medical context');
+
+        console.log(
+          "RAG: Successfully retrieved medical context"
+        );
+
       } else {
-        console.log('RAG: No medical context retrieved, using fallback');
+
+        console.log(
+          "RAG: No medical context retrieved, using fallback"
+        );
+
       }
+
+
     } catch (ragError) {
-      console.error('RAG failed, using fallback:', ragError);
-      // Continue with fallback - don't throw error
+
+      console.error(
+        "RAG failed, using fallback:",
+        ragError
+      );
+
     }
 
-    // Choose prompt based on RAG success
-    const prompt = useRAG 
-      ? RAG_REPORT_GEN_PROMPT.replace('{retrieved_context}', retrievedContext).replace('{conversation_transcript}', compressedInput)
+
+
+    // =========================
+    // Prompt Selection
+    // =========================
+
+    const prompt = useRAG
+
+      ? RAG_REPORT_GEN_PROMPT
+          .replace(
+            "{retrieved_context}",
+            retrievedContext
+          )
+          .replace(
+            "{conversation_transcript}",
+            compressedInput
+          )
+
       : ORIGINAL_REPORT_GEN_PROMPT;
 
-    // Generate report using Gemini
-    const result = await ai.models.generateContent({
-      model: GEMINI_REPORT_MODEL,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: prompt
-            }
-          ]
-        }
-      ]
-    });
 
-    const content = result.text;
+
+    // =========================
+    // OpenRouter Generation
+    // =========================
+
+
+    const result =
+      await ai.chat.completions.create({
+
+        model: REPORT_MODEL,
+
+        messages: [
+
+          {
+            role: "system",
+            content:
+              `You are a medical report generator.
+              
+Return ONLY valid JSON.
+No markdown.
+No explanation.
+No text before or after JSON.`
+          },
+
+          {
+            role: "user",
+            content: prompt
+          }
+
+        ],
+
+        temperature: 0.2
+
+      });
+
+
+
+    const content =
+      result.choices[0]
+      ?.message
+      ?.content;
+
+
 
     if (!content) {
-      throw new Error('No content in Gemini response');
+
+      throw new Error(
+        "No content from OpenRouter"
+      );
+
     }
 
-    // Parse JSON response
-    const Resp = content.trim().replace('```json', '').replace('```', '');
-    const JSONResp = JSON.parse(Resp);
 
-    // Add sessionId to response
-    JSONResp.sessionId = sessionId;
 
-    console.log(`Report generated ${useRAG ? 'with RAG' : 'without RAG (fallback)'}`);
+    // =========================
+    // JSON Parsing
+    // =========================
+
+
+    const Resp =
+      content
+        .trim()
+        .replace("```json", "")
+        .replace("```", "");
+
+
+    const JSONResp =
+      JSON.parse(Resp);
+
+
+
+    JSONResp.sessionId =
+      sessionId;
+
+
+
+    console.log(
+      `Report generated ${
+        useRAG
+          ? "with RAG"
+          : "without RAG (fallback)"
+      }`
+    );
+
+
     return JSONResp;
 
+
   } catch (error) {
-    console.error('Error generating medical report:', error);
+
+    console.error(
+      "Error generating medical report:",
+      error
+    );
+
     throw error;
+
   }
 }
 

@@ -1,6 +1,6 @@
+import { GoogleGenAI } from '@google/genai';
 import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai';
-
+console.log("🔥 GEMINI VECTOR SERVICE LOADED");
 // Pinecone client for storing and searching medical documents
 // Only initialize if API key is present and non-empty
 const pineconeApiKey = process.env.PINECONE_API_KEY;
@@ -13,20 +13,24 @@ if (pineconeApiKey && pineconeApiKey.trim().length > 0) {
   console.warn('PINECONE_API_KEY not found or empty in environment variables. RAG will be disabled.');
 }
 
-// OpenAI for creating text embeddings
+// gemini for creating text embeddings
 // Only initialize if API key is present and non-empty
-const openaiApiKey = process.env.OPENAI_API_KEY;
-let openai: OpenAI | null = null;
-if (openaiApiKey && openaiApiKey.trim().length > 0) {
-  openai = new OpenAI({
-    apiKey: openaiApiKey,
+const apiKey = process.env.GEMINI_API_KEY_REPORT;
+
+let gemini: GoogleGenAI | null = null;
+
+if (apiKey && apiKey.trim().length > 0) {
+  gemini = new GoogleGenAI({
+    apiKey,
   });
 } else {
-  console.warn('OPENAI_API_KEY not found or empty in environment variables. RAG will be disabled.');
+  console.warn(
+    "GEMINI_API_KEY_REPORT not found. RAG embeddings will be disabled."
+  );
 }
 
 const INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'report-index';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'gemini-embedding-001';
 
 /**
  * Vector Service - Handles medical knowledge storage and retrieval
@@ -57,16 +61,19 @@ async function getIndex() {
  */
 export async function createEmbedding(text: string): Promise<number[]> {
   try {
-    if (!openai) {
-      throw new Error('OpenAI client not initialized. Check OPENAI_API_KEY.');
+    if (!gemini) {
+      throw new Error('gemini client not initialized. Check gemini_API_KEY.');
     }
-    
-    const response = await openai.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: text,
+
+    const response = await gemini.models.embedContent({
+      model: "gemini-embedding-001",
+      contents: text,
+      config: {
+        outputDimensionality: 512,
+      },
     });
-    
-    return response.data[0].embedding;
+
+    return response.embeddings![0].values!;
   } catch (error) {
     console.error('Error creating embedding:', error);
     throw error;
@@ -90,15 +97,15 @@ export async function addMedicalDocuments(documents: Array<{
 }>): Promise<void> {
   try {
     const index = await getIndex();
-    
+
     // Process documents in batches
     for (const doc of documents) {
       // Create embedding for the document text
       const embedding = await createEmbedding(doc.text);
-      
+
       // Generate unique ID for the document
       const docId = `${doc.metadata.source}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Store in Pinecone with embedding and metadata
       await index.upsert({
         records: [{
@@ -112,7 +119,7 @@ export async function addMedicalDocuments(documents: Array<{
         }]
       });
     }
-    
+
     console.log(`Successfully added ${documents.length} documents to vector database`);
   } catch (error) {
     console.error('Error adding medical documents:', error);
@@ -144,10 +151,10 @@ export async function searchSimilarDocuments(
 }>> {
   try {
     const index = await getIndex();
-    
+
     // Create embedding for the search query
     const queryEmbedding = await createEmbedding(query);
-    
+
     // Search for similar vectors in Pinecone
     const results = await index.query({
       vector: queryEmbedding,
@@ -155,6 +162,22 @@ export async function searchSimilarDocuments(
       includeMetadata: true,
     });
     
+
+    console.log(
+  "🔥 QUERY VECTOR SIZE:",
+  queryEmbedding.length
+);
+
+console.log(
+  "🔥 MATCH COUNT:",
+  results.matches?.length
+);
+
+console.log(
+  "🔥 MATCHES:",
+  results.matches
+);
+
     // Format results
     const documents = results.matches?.map((match) => ({
       text: match.metadata?.text as string || '',
@@ -164,7 +187,7 @@ export async function searchSimilarDocuments(
         category: match.metadata?.category as string || '',
       },
     })) || [];
-    
+
     return documents;
   } catch (error) {
     console.error('Error searching similar documents:', error);
@@ -175,14 +198,30 @@ export async function searchSimilarDocuments(
 // Check if the vector database is ready to use
 export async function isVectorDbReady(): Promise<boolean> {
   try {
+    console.log("🔥 CHECKING PINECONE");
+
     if (!pinecone) {
+      console.log("❌ NO PINECONE CLIENT");
       return false;
     }
+
+    console.log("🔥 INDEX NAME:", INDEX_NAME);
+
     const index = await getIndex();
-    await index.describeIndexStats();
+
+    const stats = await index.describeIndexStats();
+
+    console.log("🔥 PINECONE STATS:", stats);
+
     return true;
+
   } catch (error) {
-    console.error('Vector database not ready:', error);
+
+    console.error(
+      "❌ PINECONE ERROR FULL:",
+      error
+    );
+
     return false;
   }
 }
