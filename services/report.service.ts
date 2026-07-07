@@ -310,28 +310,31 @@ export async function generateMedicalReportOriginal(
     // Compress input to save tokens (40-70% reduction)
     const compressedInput = compressForLLM(rawInput);
 
-    // Generate report using Gemini with original prompt
-    const result = await ai.models.generateContent({
-      model: GEMINI_REPORT_MODEL,
-      contents: [
+    // Generate report using OpenRouter with original prompt
+    const result = await ai.chat.completions.create({
+      model: REPORT_MODEL,
+      messages: [
         {
-          role: 'user',
-          parts: [
-            {
-              text: ORIGINAL_REPORT_GEN_PROMPT
-            },
-            {
-              text: compressedInput
-            }
-          ]
+          role: "system",
+          content: `You are a medical report generator.
+          
+Return ONLY valid JSON.
+No markdown.
+No explanation.
+No text before or after JSON.`
+        },
+        {
+          role: "user",
+          content: ORIGINAL_REPORT_GEN_PROMPT + "\n\n" + compressedInput
         }
-      ]
+      ],
+      temperature: 0.2
     });
 
-    const content = result.text;
+    const content = result.choices[0]?.message?.content;
 
     if (!content) {
-      throw new Error('No content in Gemini response');
+      throw new Error('No content from OpenRouter');
     }
 
     // Parse JSON response
