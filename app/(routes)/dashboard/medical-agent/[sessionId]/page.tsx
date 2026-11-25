@@ -9,7 +9,13 @@ import { useParams, useRouter } from "next/navigation";
 import React, { useEffect, useState, useRef } from "react";
 import Vapi from "@vapi-ai/web";
 import { toast } from "sonner";
+import { UserDetailsContext } from "@/context/UserDetailsContext";
 
+
+export type messages = {
+  role: string;
+  text: string;
+};
 
 export type SessionDetail = {
   id: number;
@@ -17,6 +23,8 @@ export type SessionDetail = {
   sessionId: string;
   report: JSON;
   selectedDoctor: doctorAgent | string | null;
+  selectedDoctorId?: number | null;
+  conversation?: messages[];
   createdOn: string;
   summary?: string;
   symptoms?: string[];
@@ -24,13 +32,11 @@ export type SessionDetail = {
   severity?: string;
   medications?: string[];
 };
-
-export type messages = {
-  role: string;
-  text: string;
-};
 function MedicalVoiceAgent() {
+  const userDetailsContext = React.useContext(UserDetailsContext);
   const { sessionId } = useParams();
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
   const [sessionDetails, setSessionDetails] = useState<SessionDetail>();
   const [callStarted, setCallStarted] = useState(false);
   const vapiRef = useRef<Vapi | null>(null);
@@ -47,6 +53,14 @@ function MedicalVoiceAgent() {
           "/api/session-chat?sessionId=" + sessionId
         );
         setSessionDetails(result.data);
+        if (Array.isArray(result.data?.conversation)) {
+          setMessages(
+            result.data.conversation.map((turn: { role?: string; text?: string }) => ({
+              role: turn.role || "user",
+              text: turn.text || "",
+            }))
+          );
+        }
       } catch (error) {
         // Error fetching session details
       }
@@ -79,11 +93,19 @@ function MedicalVoiceAgent() {
           setLiveTranscript(transcript);
           setCurrentRole(role);
         } else if (transcriptType == "final") {
-          //final transcript
-          setMessages((prev: any) => [
-            ...prev,
-            { role: role, text: transcript },
-          ]);
+          setMessages((prev: messages[]) => {
+            const next = [...prev, { role: role, text: transcript }];
+            const currentSessionId = sessionIdRef.current;
+            if (currentSessionId) {
+              axios
+                .put("/api/session-chat", {
+                  sessionId: currentSessionId,
+                  messages: next,
+                })
+                .catch(() => {});
+            }
+            return next;
+          });
           setLiveTranscript("");
           setCurrentRole(null);
         }
@@ -112,17 +134,58 @@ function MedicalVoiceAgent() {
       alert("Voice Assistant ID is not configured");
       return;
     }
-    const assistantId = selectedDoctor.assistantId;
+    const sharedAssistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID_CONSULTATION;
+    const assistantId = sharedAssistantId || selectedDoctor.assistantId;
     if (!vapiRef.current) {
       return;
     }
     try {
-      //here i am starting the voice call with assisstant  so i want to rate limit this 1 min mai 2 bs req 
-      await axios.post("/api/ratelimit/start-call")
+      const rateLimit = await axios.post("/api/ratelimit/start-call");
+      const remaining = rateLimit.data?.remaining;
+      const creditsLeft = rateLimit.data?.credits;
+      if (
+        userDetailsContext?.usersDetail &&
+        typeof creditsLeft === "number"
+      ) {
+        userDetailsContext.setUserDetail({
+          ...userDetailsContext.usersDetail,
+          credits: creditsLeft,
+        });
+      }
 
-      vapiRef.current.start(assistantId);
+      vapiRef.current.start(assistantId, {
+        variableValues: {
+          doctorId: String(selectedDoctor.id),
+          doctorName: selectedDoctor.specialist,
+          specialty: selectedDoctor.specialist,
+          systemInstructions: selectedDoctor.agentPrompt,
+        },
+        metadata: {
+          sessionId: String(sessionId),
+        },
+      });
+
+      if (typeof creditsLeft === "number") {
+        toast.success(`Call started. ${creditsLeft} credit${creditsLeft === 1 ? "" : "s"} left.`);
+      } else if (typeof remaining === "number") {
+        toast.success(`Call started. ${remaining} start call${remaining === 1 ? "" : "s"} remaining in 60 minutes.`);
+      }
     } catch (error) {
-      alert("Failed to start call. Please check your configuration.");
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const remaining = error.response.data?.remaining;
+        const remainingText =
+          typeof remaining === "number" ? ` Remaining: ${remaining}.` : "";
+        toast.error(`Only 2 start calls are allowed in 60 minutes.${remainingText}`);
+        return;
+      }
+      if (axios.isAxiosError(error) && error.response?.status === 402) {
+        toast.error(
+          error.response.data?.message ||
+            "Not enough credits. Buy more on the Pricing page."
+        );
+        return;
+      }
+      toast.error("Failed to start call.");
     }
   };
 
@@ -154,7 +217,7 @@ function MedicalVoiceAgent() {
   };
 
   return (
-    <div className="p-5 border rounded-3xl bg-secondary">
+    <div className="p-5 border border-border rounded-3xl bg-card shadow-sm">
       <div className="flex justify-between items-center">
         <h2 className="p-1 px-2 border rounded-md flex gap-2 items-center">
           <Circle

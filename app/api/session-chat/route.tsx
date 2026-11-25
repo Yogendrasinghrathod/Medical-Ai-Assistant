@@ -3,8 +3,12 @@ import { SessionChatTable } from "@/src/schema";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { desc, eq } from "drizzle-orm";
-import { AIDoctorAgents } from "@/shared/list";
+import { count, desc, eq } from "drizzle-orm";
+import { resolveDoctorAgent } from "@/services/doctor-config.service";
+import {
+  parseConversation,
+  serializeConversation,
+} from "@/services/consultation/consultation.history";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,11 +26,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'User email is required' }, { status: 400 });
     }
 
-    // Extract doctor name from object if it's an object, otherwise use as string
+    // Keep specialist name for existing history UI; also store doctor id for consultation.
     const doctorName = typeof selectedDoctor === 'object' && selectedDoctor !== null
       ? selectedDoctor.specialist || selectedDoctor.id?.toString() || ''
       : selectedDoctor || '';
 
+    const selectedDoctorId =
+      typeof selectedDoctor === 'object' && selectedDoctor !== null && selectedDoctor.id != null
+        ? Number(selectedDoctor.id)
+        : null;
 
     const result = await db
       .insert(SessionChatTable)
@@ -35,6 +43,7 @@ export async function POST(req: NextRequest) {
         createdBy: userEmail,
         notes: notes || "",
         selectedDoctor: doctorName,
+        selectedDoctorId: Number.isNaN(selectedDoctorId as number) ? null : selectedDoctorId,
       })
       .returning();
 
@@ -85,13 +94,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await db
+    const page = Math.max(Number(searchParams.get("page") || 1), 1);
+    const limit = Math.min(Math.max(Number(searchParams.get("limit") || 5), 1), 50);
+    const offset = (page - 1) * limit;
+    const ownedByUser = eq(SessionChatTable.createdBy, userEmail);
+
+    const [totalRow] = await db
+      .select({ total: count() })
+      .from(SessionChatTable)
+      .where(ownedByUser);
+
+    const items = await db
       .select()
       .from(SessionChatTable)
-      .where(eq(SessionChatTable.createdBy, userEmail))
-      .orderBy(desc(SessionChatTable.id));
+      .where(ownedByUser)
+      .orderBy(desc(SessionChatTable.id))
+      .limit(limit)
+      .offset(offset);
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      items,
+      total: totalRow?.total ?? 0,
+      page,
+      limit,
+    });
 
   } else {
     if (!sessionId) {
@@ -112,17 +138,63 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Find the full doctor object from the stored specialist name
     const sessionData = result[0];
-    const doctor = AIDoctorAgents.find(
-      (doc) => doc.specialist === sessionData.selectedDoctor
+    const doctor = resolveDoctorAgent(
+      sessionData.selectedDoctorId,
+      sessionData.selectedDoctor
     );
 
-    // Return session data with full doctor object
     return NextResponse.json({
       ...sessionData,
       selectedDoctor: doctor || null,
+      conversation: parseConversation(sessionData.conversation),
     });
 
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const { sessionId, messages } = await req.json();
+    const user = await currentUser();
+    const userEmail = user?.primaryEmailAddress?.emailAddress;
+
+    if (!userEmail) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!sessionId || typeof sessionId !== "string") {
+      return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
+    }
+
+    const result = await db
+      .select()
+      .from(SessionChatTable)
+      .where(eq(SessionChatTable.sessionId, sessionId));
+
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    if (result[0].createdBy !== userEmail) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const conversation = parseConversation(messages);
+    await db
+      .update(SessionChatTable)
+      .set({ conversation: serializeConversation(conversation) })
+      .where(eq(SessionChatTable.sessionId, sessionId));
+
+    return NextResponse.json({
+      sessionId,
+      conversation,
+    });
+  } catch (error) {
+    console.error("Failed to update conversation:", error);
+    return NextResponse.json(
+      { error: "Failed to update conversation" },
+      { status: 500 }
+    );
   }
 }

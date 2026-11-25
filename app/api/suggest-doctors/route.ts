@@ -1,203 +1,102 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ChatOpenAI } from "@langchain/openai";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { JsonOutputParser } from "@langchain/core/output_parsers";
+import { z } from "zod";
 import { AIDoctorAgents } from "@/shared/list";
 
-type doctorAgent = {
-  id: number;
-  specialist: string;
-  description: string;
-  image: string;
-  agentPrompt: string;
-  voiceId: string;
-  subscriptionRequired: boolean;
-};
+type doctorAgent = (typeof AIDoctorAgents)[number];
 
-// Keywords mapping for each doctor specialty
-const specialtyKeywords: Record<string, string[]> = {
-  "General Physician": [
-    "general",
-    "common",
-    "fever",
-    "cold",
-    "flu",
-    "headache",
-    "body ache",
-    "tired",
-    "weak",
-  ],
-  Pediatrician: [
-    "child",
-    "baby",
-    "infant",
-    "toddler",
-    "kid",
-    "children",
-    "pediatric",
-    "young",
-  ],
-  Dermatologist: [
-    "skin",
-    "rash",
-    "acne",
-    "eczema",
-    "dermatitis",
-    "itchy",
-    "redness",
-    "pimple",
-    "wart",
-    "mole",
-  ],
-  Psychologist: [
-    "mental",
-    "anxiety",
-    "stress",
-    "depression",
-    "mood",
-    "emotional",
-    "feeling",
-    "sad",
-    "worried",
-    "panic",
-  ],
-  Nutritionist: [
-    "diet",
-    "weight",
-    "nutrition",
-    "food",
-    "eating",
-    "obesity",
-    "calorie",
-    "meal",
-    "healthy eating",
-  ],
-  Cardiologist: [
-    "heart",
-    "chest",
-    "cardiac",
-    "blood pressure",
-    "hypertension",
-    "palpitation",
-    "breath",
-    "cardio",
-  ],
-  "ENT Specialist": [
-    "ear",
-    "nose",
-    "throat",
-    "sinus",
-    "hearing",
-    "tinnitus",
-    "nasal",
-    "sore throat",
-    "earache",
-  ],
-  Orthopedic: [
-    "bone",
-    "joint",
-    "muscle",
-    "pain",
-    "fracture",
-    "sprain",
-    "knee",
-    "back pain",
-    "shoulder",
-    "hip",
-  ],
-  Gynecologist: [
-    "women",
-    "menstrual",
-    "period",
-    "pregnancy",
-    "gynecological",
-    "reproductive",
-    "hormonal",
-    "ovarian",
-  ],
-  Dentist: [
-    "tooth",
-    "teeth",
-    "dental",
-    "gum",
-    "oral",
-    "mouth",
-    "cavity",
-    "toothache",
-    "braces",
-    "dental pain",
-  ],
-};
+const DOCTOR_SPECIALISTS = AIDoctorAgents.map((doctor) => doctor.specialist) as [
+  string,
+  ...string[],
+];
 
-function suggestDoctors(notes: string): doctorAgent[] {
-  if (!notes || notes.trim().length === 0) {
-    // Return all doctors if no notes provided
-    return AIDoctorAgents;
-  }
+const SuggestionSchema = z.object({
+  specialists: z
+    .array(z.enum(DOCTOR_SPECIALISTS))
+    .min(1)
+    .max(5)
+    .describe("Best matching specialists from the allowed list only"),
+});
 
-  const notesLower = notes.toLowerCase();
-  const doctorScores: Map<number, number> = new Map();
+type SuggestionOutput = z.infer<typeof SuggestionSchema>;
 
-  // Score each doctor based on keyword matches
-  AIDoctorAgents.forEach((doctor) => {
-    const keywords = specialtyKeywords[doctor.specialist] || [];
-    let score = 0;
-
-    // Check for keyword matches
-    keywords.forEach((keyword) => {
-      if (notesLower.includes(keyword.toLowerCase())) {
-        score += 2; // Higher weight for keyword matches
-      }
-    });
-
-    // Check if specialist name is mentioned
-    if (notesLower.includes(doctor.specialist.toLowerCase())) {
-      score += 5; // Very high weight for direct mention
-    }
-
-    // Check if description keywords match
-    const descriptionWords = doctor.description.toLowerCase().split(" ");
-    descriptionWords.forEach((word) => {
-      if (word.length > 4 && notesLower.includes(word)) {
-        score += 1;
-      }
-    });
-
-    doctorScores.set(doctor.id, score);
-  });
-
-  // Sort doctors by score (highest first) and return top matches
-  // Create a copy to avoid mutating the original array
-  const sortedDoctors = [...AIDoctorAgents].sort((a, b) => {
-    const scoreA = doctorScores.get(a.id) || 0;
-    const scoreB = doctorScores.get(b.id) || 0;
-    return scoreB - scoreA;
-  });
-
-  // Return top 3-5 suggested doctors, or all if scores are similar
-  const topScore = doctorScores.get(sortedDoctors[0].id) || 0;
-
-  if (topScore === 0) {
-    // No matches, return General Physician and top 2-3 others
-    return [AIDoctorAgents[0], ...AIDoctorAgents.slice(1, 4)];
-  }
-
-  // Return doctors with score > 0, or top 5
-  const suggested = sortedDoctors.filter((doctor) => {
-    const score = doctorScores.get(doctor.id) || 0;
-    return score > 0;
-  });
-
-  return suggested.length > 0 ? suggested.slice(0, 5) : sortedDoctors.slice(0, 3);
+function fallbackDoctors(): doctorAgent[] {
+  return AIDoctorAgents.slice(0, 4);
 }
 
+function mapSpecialistsToDoctors(specialists: string[]): doctorAgent[] {
+  const unique = [...new Set(specialists)];
+  const matched = unique
+    .map((name) => AIDoctorAgents.find((doctor) => doctor.specialist === name))
+    .filter((doctor): doctor is doctorAgent => Boolean(doctor));
+
+  if (matched.length === 0) {
+    return fallbackDoctors();
+  }
+
+  return matched.slice(0, 5);
+}
+
+function buildLlm() {
+  const apiKey = process.env.AICREDITS_API_KEY;
+  if (!apiKey) {
+    throw new Error("AICREDITS_API_KEY is not set");
+  }
+
+  return new ChatOpenAI({
+    model: process.env.AICREDITS_MODEL || "openai/gpt-4o-mini",
+    temperature: 0,
+    apiKey,
+    configuration: {
+      baseURL: process.env.AICREDITS_BASE_URL || "https://api.aicredits.in/v1",
+    },
+  });
+}
+
+async function suggestDoctorsWithLlm(notes: string): Promise<doctorAgent[]> {
+  if (!notes?.trim()) {
+    return fallbackDoctors();
+  }
+
+  const parser = new JsonOutputParser<SuggestionOutput>();
+  const allowed = DOCTOR_SPECIALISTS.join(", ");
+
+  const prompt = ChatPromptTemplate.fromMessages([
+    [
+      "system",
+      `You are a medical triage assistant. Choose the most relevant specialists for the patient's notes.
+
+Allowed specialists (use these exact strings only): ${allowed}
+
+Return JSON only, no markdown:
+{{"specialists":["General Physician"]}}
+
+Rules:
+- Pick 1 to 5 specialists from the allowed list.
+- Prefer the closest match to symptoms.
+- If unsure, include "General Physician".
+- Never invent specialists outside the allowed list.`,
+    ],
+    ["human", "Patient notes:\n{notes}"],
+  ]);
+
+  const llm = buildLlm();
+  const chain = prompt.pipe(llm).pipe(parser);
+  const raw = await chain.invoke({ notes });
+  const parsed = SuggestionSchema.parse(raw);
+
+  return mapSpecialistsToDoctors(parsed.specialists);
+}
 
 export async function POST(req: NextRequest) {
   const { notes } = await req.json();
   try {
-    const suggestions = suggestDoctors(notes);
+    const suggestions = await suggestDoctorsWithLlm(notes);
     return NextResponse.json(suggestions);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to suggest doctors" },
-      { status: 500 }
-    );
+    console.error("suggest-doctors failed, using fallback:", error);
+    return NextResponse.json(fallbackDoctors());
   }
 }

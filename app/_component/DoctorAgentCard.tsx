@@ -20,8 +20,6 @@ type props = {
   doctorAgent: doctorAgent;
 };
 
-
-
 function DoctorAgentCard({ doctorAgent }: props) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -60,17 +58,29 @@ function DoctorAgentCard({ doctorAgent }: props) {
   };
 
   return (
-    <div className="">
-      <Image src={doctorAgent.image} alt={doctorAgent.specialist} width={200} height={300} className="w-full h-[250px] object-cover rounded-xl" />
-      <h2 className="font-bold ">{doctorAgent.specialist}</h2>
-      <p className="line-clamp-2  text-sm text-gray-500">{doctorAgent.description}</p>
-      <Button
-        className="w-full mt-2"
-        onClick={handleStartConsultation}
-        disabled={loading}
-      >
-        {loading ? 'Starting...' : 'Start Consultation'} <IconArrowRight />
-      </Button>
+    <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md hover:shadow-primary/10">
+      <div className="relative h-44 overflow-hidden bg-muted">
+        <Image
+          src={doctorAgent.image}
+          alt={doctorAgent.specialist}
+          width={400}
+          height={300}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        />
+      </div>
+      <div className="flex flex-1 flex-col p-4">
+        <h3 className="font-semibold text-foreground">{doctorAgent.specialist}</h3>
+        <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">
+          {doctorAgent.description}
+        </p>
+        <Button
+          className="mt-4 w-full"
+          onClick={handleStartConsultation}
+          disabled={loading}
+        >
+          {loading ? "Starting..." : "Start consultation"} <IconArrowRight />
+        </Button>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,10 @@
+"use client";
+
 import React from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -9,141 +12,233 @@ import {
 import { Button } from "@/components/ui/button";
 import { SessionDetail } from "../(routes)/dashboard/medical-agent/[sessionId]/page";
 import moment from "moment";
+import { Stethoscope } from "lucide-react";
+
+type MedicalReport = {
+  sessionId?: string;
+  agent?: string;
+  user?: string;
+  timestamp?: string;
+  chiefComplaint?: string;
+  summary?: string;
+  symptoms?: string[];
+  duration?: string;
+  severity?: string;
+  medicationsMentioned?: string[];
+  medications?: string[];
+  recommendations?: string[];
+};
 
 type Props = {
   record: SessionDetail;
 };
 
+function asList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function parseReport(raw: unknown): MedicalReport {
+  if (!raw) {
+    return {};
+  }
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as MedicalReport;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof raw === "object") {
+    return raw as MedicalReport;
+  }
+  return {};
+}
+
+function specialistName(record: SessionDetail, report: MedicalReport) {
+  if (report.agent) {
+    return report.agent;
+  }
+  if (typeof record.selectedDoctor === "string") {
+    return record.selectedDoctor;
+  }
+  return record.selectedDoctor?.specialist || "AI Medical Specialist";
+}
+
 function ViewReportDialog({ record }: Props) {
+  const report = parseReport(record.report);
+  const specialist = specialistName(record, report);
+  const consultedOn = report.timestamp || record.createdOn;
+  const patient = report.user || "Anonymous";
+  const complaint = report.chiefComplaint || record.notes || "Not recorded.";
+  const summary = report.summary || record.summary || "";
+  const symptoms = asList(report.symptoms || record.symptoms);
+  const medications = asList(
+    report.medicationsMentioned || report.medications || record.medications
+  );
+  const recommendations = asList(report.recommendations);
+  const duration = report.duration || record.duration;
+  const severity = report.severity || record.severity;
+  const reportId = (report.sessionId || record.sessionId || "—").slice(0, 8).toUpperCase();
+
   return (
     <Dialog>
-      <DialogTrigger>
-        <Button variant="link" size="sm">
-          View Report
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          View report
         </Button>
       </DialogTrigger>
 
-      <DialogContent
-        className="max-w-3xl max-h-[85vh] overflow-y-auto"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
-        <DialogHeader>
-          <DialogTitle className="text-center text-3xl font-bold text-blue-600">
-            Medical AI Voice Agent Report
-          </DialogTitle>
+      <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-3xl">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Consultation report</DialogTitle>
+          <DialogDescription>
+            Generated health summary for this session.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-6 space-y-6 text-sm text-gray-700">
-          {/* Session Info */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Session Info
-            </h3>
-            <div className="grid grid-cols-2 gap-4 mt-3">
-              <p>
-                <span className="font-semibold">Doctor:</span>{" "}
-                {typeof record.selectedDoctor === 'string' 
-                  ? record.selectedDoctor 
-                  : record.selectedDoctor?.specialist || 'Unknown Doctor'}
-              </p>
-              <p>
-                <span className="font-semibold">User:</span> Anonymous
-              </p>
-              <p>
-                <span className="font-semibold">Consulted On:</span>{" "}
-                {moment(record.createdOn).format("MMMM Do YYYY, h:mm a")}
-              </p>
-              <p>
-                <span className="font-semibold">Agent:</span> General Physician
-                AI
-              </p>
+        <article className="bg-[#f7f4ec] px-6 py-8 text-[#1f2a24] sm:px-10">
+          <header className="border-b-2 border-primary/30 pb-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Stethoscope className="size-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                    AI Medical
+                  </p>
+                  <h2 className="font-serif text-2xl font-semibold tracking-tight">
+                    Consultation Summary
+                  </h2>
+                </div>
+              </div>
+              <div className="text-right text-xs text-[#5b655f]">
+                <p>Report #{reportId}</p>
+                <p>
+                  {consultedOn
+                    ? moment(consultedOn).format("D MMMM YYYY")
+                    : "Date not recorded"}
+                </p>
+              </div>
+            </div>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#4d5752]">
+              Confidential health summary prepared after a voice consultation.
+              This is not a clinical chart or a substitute for in-person care.
+            </p>
+          </header>
+
+          <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-3 border-b border-[#d9d3c4] pb-5 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                Specialist
+              </dt>
+              <dd className="mt-1 font-medium">{specialist}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                Patient
+              </dt>
+              <dd className="mt-1 font-medium">{patient}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                Consulted
+              </dt>
+              <dd className="mt-1 font-medium">
+                {consultedOn
+                  ? moment(consultedOn).format("h:mm a")
+                  : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                Session
+              </dt>
+              <dd className="mt-1 font-mono text-xs">{reportId}</dd>
+            </div>
+          </dl>
+
+          <section className="mt-8">
+            <h3 className="font-serif text-lg font-semibold">Reason for visit</h3>
+            <p className="mt-2 font-serif text-[15px] leading-7">{complaint}</p>
+          </section>
+
+          {summary ? (
+            <section className="mt-7">
+              <h3 className="font-serif text-lg font-semibold">Clinical narrative</h3>
+              <p className="mt-2 font-serif text-[15px] leading-7">{summary}</p>
+            </section>
+          ) : null}
+
+          <section className="mt-7">
+            <h3 className="font-serif text-lg font-semibold">Observations</h3>
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border border-[#d9d3c4] bg-white/60 p-3">
+                <p className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                  Duration
+                </p>
+                <p className="mt-1 text-sm font-medium">{duration || "Not recorded"}</p>
+              </div>
+              <div className="rounded-lg border border-[#d9d3c4] bg-white/60 p-3">
+                <p className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                  Severity
+                </p>
+                <p className="mt-1 text-sm font-medium capitalize">
+                  {severity || "Not recorded"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#d9d3c4] bg-white/60 p-3">
+                <p className="text-[11px] uppercase tracking-wider text-[#7a847e]">
+                  Symptoms noted
+                </p>
+                <p className="mt-1 text-sm font-medium">
+                  {symptoms.length ? symptoms.join(", ") : "None listed"}
+                </p>
+              </div>
             </div>
           </section>
 
-          {/* Chief Complaint */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Chief Complaint
-            </h3>
-            <p className="mt-2">{record.notes || "Not specified"}</p>
-          </section>
-
-          {/* Summary */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Summary
-            </h3>
-            <p className="mt-2">{record.summary || "No summary available"}</p>
-          </section>
-
-          {/* Symptoms */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Symptoms
-            </h3>
-            <ul className="list-disc ml-5 mt-2">
-              {record.symptoms?.length ? (
-                record.symptoms.map((s, i) => <li key={i}>{s}</li>)
-              ) : (
-                <li>Not specified</li>
-              )}
-            </ul>
-          </section>
-
-          {/* Duration & Severity */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Duration & Severity
-            </h3>
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <p>
-                <span className="font-semibold">Duration:</span>{" "}
-                {record.duration || "Not specified"}
+          <section className="mt-7">
+            <h3 className="font-serif text-lg font-semibold">Medications discussed</h3>
+            {medications.length ? (
+              <p className="mt-2 font-serif text-[15px] leading-7">
+                {medications.join("; ")}.
               </p>
-              <p>
-                <span className="font-semibold">Severity:</span>{" "}
-                {record.severity || "Moderate"}
+            ) : (
+              <p className="mt-2 font-serif text-[15px] leading-7 text-[#5b655f]">
+                No medications were mentioned during this consultation.
               </p>
-            </div>
+            )}
           </section>
 
-          {/* Medications */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Medications Mentioned
-            </h3>
-            <ul className="list-disc ml-5 mt-2">
-              {record.medications?.length ? (
-                record.medications.map((m, i) => <li key={i}>{m}</li>)
-              ) : (
-                <>
-                  <li>ibuprofen</li>
-                  <li>acetaminophen</li>
-                </>
-              )}
-            </ul>
+          <section className="mt-7">
+            <h3 className="font-serif text-lg font-semibold">Suggested next steps</h3>
+            {recommendations.length ? (
+              <ol className="mt-3 list-decimal space-y-2 pl-5 font-serif text-[15px] leading-7">
+                {recommendations.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-2 font-serif text-[15px] leading-7 text-[#5b655f]">
+                No specific next steps were generated. Please consult a licensed
+                clinician if symptoms persist or worsen.
+              </p>
+            )}
           </section>
 
-          {/* Recommendations */}
-          <section>
-            <h3 className="text-lg font-semibold text-blue-500 border-b pb-1">
-              Recommendations
-            </h3>
-            <ul className="list-disc ml-5 mt-2">
-              <li>
-                Try over-the-counter pain relievers (ibuprofen or acetaminophen)
-              </li>
-              <li>Follow dosage instructions carefully</li>
-              <li>Consult a healthcare provider if pain persists or worsens</li>
-            </ul>
-          </section>
-
-          {/* Disclaimer */}
-          <div className="mt-6 border-t pt-3 text-xs text-center text-gray-500">
-            This report was generated by an AI Medical Assistant for
-            informational purposes only.
-          </div>
-        </div>
+          <footer className="mt-10 border-t border-[#d9d3c4] pt-4 text-[11px] leading-5 text-[#6b746e]">
+            Prepared by AI Medical for informational use only. This document is
+            not a diagnosis, prescription, or medical record. Seek urgent care
+            for emergency symptoms. Generated for Yogendra Singh Rathod —
+            educational demonstration.
+          </footer>
+        </article>
       </DialogContent>
     </Dialog>
   );

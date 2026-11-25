@@ -2,15 +2,6 @@ import { ai, REPORT_MODEL } from '@/src/GeminiModel';
 import { getMedicalContext } from './rag.service';
 import { compressForLLM } from '@/utils/tokenCompressor';
 
-/**
- * Report Service - Generates medical reports with RAG
- * 
- * Keeping report generation separate makes the code cleaner and easier to test.
- * It also handles the fallback logic if RAG doesn't work.
- */
-
-// Updated prompt that includes medical context from RAG
-// This tells the LLM to use the retrieved medical info for better accuracy
 const RAG_REPORT_GEN_PROMPT = `You are an AI medical assistant.
 
 Use the provided medical reference information and patient conversation.
@@ -49,11 +40,10 @@ Return the result in this JSON format:
   "severity": "string",
   "medicationsMentioned": ["med1", "med2"],
   "recommendations": ["rec1", "rec2"]
-} 
+}
 Only include valid fields. Respond with nothing else.
 `;
 
-// Original prompt without RAG (fallback if vector DB isn't working)
 const ORIGINAL_REPORT_GEN_PROMPT = `You are an AI Medical Voice Agent that just finished a voice conversation with a user. Based on the doctor AI Agent  info and Conversation between Ai medical agent and user, generate a structured report with the following fields:
 
 sessionId: a unique session identifier
@@ -92,262 +82,78 @@ Return the result in this JSON format:
 "severity": "string",
 "medicationsMentioned": ["med1", "med2"],
 "recommendations": ["rec1", "rec2"]
-} 
+}
 Only include valid fields. Respond with nothing else.
 `;
 
-/**
- * Generate a medical report with RAG enhancement
- * 
- * Tries to get medical context from the vector database first. If that works,
- * it uses the enhanced prompt with the retrieved info. If RAG fails (vector DB
- * down, no API keys, etc.), it falls back to the original prompt so reports
- * still get generated.
- * 
- * @param sessionId - Session ID
- * @param sessionDetails - AI agent info
- * @param messages - Conversation messages
- * @returns The generated report as JSON
- */
+const REPORT_SYSTEM_PROMPT = `You are a medical report generator.
+
+Return ONLY valid JSON.
+No markdown.
+No explanation.
+No text before or after JSON.`;
+
+function parseReportJson(content: string) {
+  const cleaned = content.trim().replace("```json", "").replace("```", "");
+  return JSON.parse(cleaned);
+}
+
 export async function generateMedicalReport(
   sessionId: string,
   sessionDetails: any,
   messages: any[]
 ): Promise<any> {
   try {
-
-    // Prepare conversation transcript
     const rawInput =
       "AI Doctor Agent Info:" +
       JSON.stringify(sessionDetails) +
       ",Conversation:" +
       JSON.stringify(messages);
-
-
-    // Compress input to reduce tokens
     const compressedInput = compressForLLM(rawInput);
-
-
-    // =========================
-    // RAG Retrieval
-    // =========================
 
     let retrievedContext = "";
     let useRAG = false;
 
-
     try {
-
-      const fullTranscript =
-        JSON.stringify(messages);
-
-
-      retrievedContext =
-        await getMedicalContext(fullTranscript);
-
-
-      if (
-        retrievedContext &&
-        retrievedContext.length > 0
-      ) {
-
+      retrievedContext = await getMedicalContext(JSON.stringify(messages));
+      if (retrievedContext) {
         useRAG = true;
-
-        console.log(
-          "RAG: Successfully retrieved medical context"
-        );
-
+        console.log("RAG: Successfully retrieved medical context");
       } else {
-
-        console.log(
-          "RAG: No medical context retrieved, using fallback"
-        );
-
+        console.log("RAG: No medical context retrieved, using fallback");
       }
-
-
     } catch (ragError) {
-
-      console.error(
-        "RAG failed, using fallback:",
-        ragError
-      );
-
+      console.error("RAG failed, using fallback:", ragError);
     }
-
-
-
-    // =========================
-    // Prompt Selection
-    // =========================
 
     const prompt = useRAG
+      ? RAG_REPORT_GEN_PROMPT.replace("{retrieved_context}", retrievedContext).replace(
+          "{conversation_transcript}",
+          compressedInput
+        )
+      : `${ORIGINAL_REPORT_GEN_PROMPT}\n\n${compressedInput}`;
 
-      ? RAG_REPORT_GEN_PROMPT
-          .replace(
-            "{retrieved_context}",
-            retrievedContext
-          )
-          .replace(
-            "{conversation_transcript}",
-            compressedInput
-          )
-
-      : ORIGINAL_REPORT_GEN_PROMPT;
-
-
-
-    // =========================
-    // OpenRouter Generation
-    // =========================
-
-
-    const result =
-      await ai.chat.completions.create({
-
-        model: REPORT_MODEL,
-
-        messages: [
-
-          {
-            role: "system",
-            content:
-              `You are a medical report generator.
-              
-Return ONLY valid JSON.
-No markdown.
-No explanation.
-No text before or after JSON.`
-          },
-
-          {
-            role: "user",
-            content: prompt
-          }
-
-        ],
-
-        temperature: 0.2
-
-      });
-
-
-
-    const content =
-      result.choices[0]
-      ?.message
-      ?.content;
-
-
-
-    if (!content) {
-
-      throw new Error(
-        "No content from OpenRouter"
-      );
-
-    }
-
-
-
-    // =========================
-    // JSON Parsing
-    // =========================
-
-
-    const Resp =
-      content
-        .trim()
-        .replace("```json", "")
-        .replace("```", "");
-
-
-    const JSONResp =
-      JSON.parse(Resp);
-
-
-
-    JSONResp.sessionId =
-      sessionId;
-
-
-
-    console.log(
-      `Report generated ${
-        useRAG
-          ? "with RAG"
-          : "without RAG (fallback)"
-      }`
-    );
-
-
-    return JSONResp;
-
-
-  } catch (error) {
-
-    console.error(
-      "Error generating medical report:",
-      error
-    );
-
-    throw error;
-
-  }
-}
-
-// Original report generation without RAG
-// This is the fallback if RAG isn't working
-export async function generateMedicalReportOriginal(
-  sessionId: string,
-  sessionDetails: any,
-  messages: any[]
-): Promise<any> {
-  try {
-    // Prepare raw input
-    const rawInput = "AI Doctor Agent Info:" + JSON.stringify(sessionDetails) + ",Conversation:" + JSON.stringify(messages);
-
-    // Compress input to save tokens (40-70% reduction)
-    const compressedInput = compressForLLM(rawInput);
-
-    // Generate report using OpenRouter with original prompt
     const result = await ai.chat.completions.create({
       model: REPORT_MODEL,
       messages: [
-        {
-          role: "system",
-          content: `You are a medical report generator.
-          
-Return ONLY valid JSON.
-No markdown.
-No explanation.
-No text before or after JSON.`
-        },
-        {
-          role: "user",
-          content: ORIGINAL_REPORT_GEN_PROMPT + "\n\n" + compressedInput
-        }
+        { role: "system", content: REPORT_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
       ],
-      temperature: 0.2
+      temperature: 0.2,
     });
 
     const content = result.choices[0]?.message?.content;
-
     if (!content) {
-      throw new Error('No content from OpenRouter');
+      throw new Error("No content from AICredits");
     }
 
-    // Parse JSON response
-    const Resp = content.trim().replace('```json', '').replace('```', '');
-    const JSONResp = JSON.parse(Resp);
-
-    // Add sessionId to response
+    const JSONResp = parseReportJson(content);
     JSONResp.sessionId = sessionId;
 
+    console.log(`Report generated ${useRAG ? "with RAG" : "without RAG (fallback)"}`);
     return JSONResp;
-
   } catch (error) {
-    console.error('Error generating medical report (original):', error);
+    console.error("Error generating medical report:", error);
     throw error;
   }
 }

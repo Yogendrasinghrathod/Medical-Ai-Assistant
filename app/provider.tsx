@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useUser } from '@clerk/nextjs';
 import { UserDetailsContext } from '@/context/UserDetailsContext';
-import { useSessionLogout } from '@/hooks/useSessionLogout';
 
 
 export type UsersDetail = {
@@ -18,9 +17,6 @@ function Provider({
 }>) {
   const { user } = useUser();
   const [usersDetail, setUserDetail] = useState<UsersDetail | undefined>(undefined)
-
-  // Enable automatic logout when browser closes
-  useSessionLogout();
 
   useEffect(() => {
     const CreateNewUser = async () => {

@@ -7,17 +7,18 @@ export type RateLimitResult = {
   remaining: number;
 };
 
-const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-const isRateLimitConfigured = Boolean(upstashUrl && upstashToken);
-
 function createLimiter(
   limit: number,
   window: `${number} ${"s" | "m" | "h" | "d"}`,
   analytics = false
-): Ratelimit | null {
-  if (!isRateLimitConfigured) {
-    return null;
+) {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+
+  if (!url || !token) {
+    throw new Error(
+      "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required"
+    );
   }
 
   return new Ratelimit({
@@ -27,31 +28,12 @@ function createLimiter(
   });
 }
 
-export const startCallLimiter = createLimiter(2, "1 m", true);
+export const startCallLimiter = createLimiter(2, "60 m", true);
 export const userRatelimit = createLimiter(5, "60 s");
 
-const allowRequest: RateLimitResult = {
-  success: true,
-  reset: Date.now(),
-  remaining: 999,
-};
-
-/**
- * Apply rate limiting with graceful fallback when Upstash is unavailable.
- */
 export async function applyRateLimit(
-  limiter: Ratelimit | null,
+  limiter: Ratelimit,
   key: string
 ): Promise<RateLimitResult> {
-  if (!limiter) {
-    console.warn("Upstash Redis not configured, skipping rate limit");
-    return allowRequest;
-  }
-
-  try {
-    return await limiter.limit(key);
-  } catch (error) {
-    console.warn("Rate limiter unavailable, allowing request:", error);
-    return allowRequest;
-  }
+  return limiter.limit(key);
 }

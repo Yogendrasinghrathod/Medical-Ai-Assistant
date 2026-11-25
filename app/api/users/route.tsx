@@ -4,6 +4,7 @@ import { usersTable } from "@/src/schema";
 import { currentUser } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { STARTING_CREDITS } from "@/shared/credits";
 
 export async function POST(req: Request) {
     const user = await currentUser();
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
             const result = await db.insert(usersTable).values({
                 name: user?.fullName || "",
                 email: user?.primaryEmailAddress?.emailAddress || "",
-                credits: 10
+                credits: STARTING_CREDITS
             }).returning();
             return NextResponse.json(result[0], {
                 headers: {

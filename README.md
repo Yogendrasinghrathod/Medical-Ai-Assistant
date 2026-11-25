@@ -44,7 +44,7 @@ npm install
 ```
 
 3. Set up environment variables:
-Create a `.env.local` file with the following variables:
+Create a `.env` file with the following variables:
 ```
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_key
 CLERK_SECRET_KEY=your_clerk_secret
