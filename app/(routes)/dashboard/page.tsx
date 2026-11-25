@@ -15,6 +15,9 @@ const DoctorAgentList = dynamic(() => import("@/app/_component/DoctorAgentList")
 const AddNewSessionDialog = dynamic(
   () => import("./_components/AddNewSessionDialog")
 );
+const CreditsSummary = dynamic(
+  () => import("./_components/CreditsSummary")
+);
 
 function Dashboard() {
   return (
@@ -30,6 +33,7 @@ function Dashboard() {
           Describe symptoms, get a matching specialist, and start a voice session
           in a few taps.
         </p>
+        <CreditsSummary />
         <div className="mt-5">
           <AddNewSessionDialog
             triggerClassName="bg-card text-primary hover:bg-brand-soft"

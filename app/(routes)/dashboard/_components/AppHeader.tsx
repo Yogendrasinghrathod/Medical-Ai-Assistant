@@ -1,10 +1,10 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useContext, useState } from "react";
-import { Menu, Stethoscope, X } from "lucide-react";
+import { Coins, Menu, Stethoscope, X } from "lucide-react";
 import { UserDetailsContext } from "@/context/UserDetailsContext";
 
 const menuOptions = [
@@ -17,7 +17,8 @@ const menuOptions = [
 function AppHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const credits = useContext(UserDetailsContext)?.usersDetail?.credits;
+  const { isSignedIn } = useUser();
+  const credits = useContext(UserDetailsContext)?.usersDetail?.credits ?? 0;
 
   const isActive = (path: string) =>
     path === "/dashboard" ? pathname === path : pathname.startsWith(path);
@@ -51,11 +52,12 @@ function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {typeof credits === "number" && (
+          {isSignedIn && (
             <Link
               href="/profile"
-              className="hidden rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground sm:inline-flex"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
             >
+              <Coins className="size-3.5" />
               {credits} credits
             </Link>
           )}
@@ -74,6 +76,16 @@ function AppHeader() {
       {open && (
         <nav className="border-t border-border bg-card px-4 py-3 md:hidden">
           <div className="flex flex-col gap-1">
+            {isSignedIn && (
+              <Link
+                href="/profile"
+                onClick={() => setOpen(false)}
+                className="mb-1 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                <Coins className="size-4" />
+                {credits} credits available
+              </Link>
+            )}
             {menuOptions.map((option) => (
               <Link
                 key={option.id}

@@ -54,14 +54,25 @@ function PricingPage() {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature,
             });
-            const nextCredits = verified.data?.credits;
-            if (userDetailsContext?.usersDetail && typeof nextCredits === "number") {
-              userDetailsContext.setUserDetail({
-                ...userDetailsContext.usersDetail,
-                credits: nextCredits,
-              });
+            const nextCredits = Number(verified.data?.credits);
+            if (userDetailsContext) {
+              if (Number.isFinite(nextCredits)) {
+                userDetailsContext.setUserDetail({
+                  name: userDetailsContext.usersDetail?.name || user?.fullName || "",
+                  email:
+                    userDetailsContext.usersDetail?.email ||
+                    user?.primaryEmailAddress?.emailAddress ||
+                    "",
+                  credits: nextCredits,
+                });
+              }
+              await userDetailsContext.refreshUser();
             }
-            toast.success("Payment confirmed. Credits added.");
+            toast.success(
+              Number.isFinite(nextCredits)
+                ? `Payment confirmed. You now have ${nextCredits} credits.`
+                : "Payment confirmed. Credits added."
+            );
           } catch {
             toast.error("Payment could not be verified. If you were charged, refresh and check your balance.");
           } finally {

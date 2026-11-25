@@ -9,6 +9,19 @@ export type CreditEventType =
   | "call"
   | "opening_balance";
 
+function asCredits(value: number | null | undefined) {
+  return Number.isFinite(value) ? Number(value) : 0;
+}
+
+export async function getCredits(email: string) {
+  const rows = await db
+    .select({ credits: usersTable.credits })
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+  return asCredits(rows[0]?.credits);
+}
+
 async function recordLedger(input: {
   email: string;
   type: CreditEventType;
@@ -17,14 +30,18 @@ async function recordLedger(input: {
   reference?: string;
   note?: string;
 }) {
-  await db.insert(CreditLedgerTable).values({
-    email: input.email,
-    type: input.type,
-    amount: input.amount,
-    balanceAfter: input.balanceAfter,
-    reference: input.reference,
-    note: input.note,
-  });
+  try {
+    await db.insert(CreditLedgerTable).values({
+      email: input.email,
+      type: input.type,
+      amount: input.amount,
+      balanceAfter: input.balanceAfter,
+      reference: input.reference,
+      note: input.note,
+    });
+  } catch {
+    // Keep the users.credits balance even if the history row fails.
+  }
 }
 
 export async function deductCallCredit(email: string) {
@@ -46,15 +63,16 @@ export async function deductCallCredit(email: string) {
     return null;
   }
 
+  const credits = asCredits(user.credits);
   await recordLedger({
     email,
     type: "call",
     amount: -CREDITS_PER_CALL,
-    balanceAfter: user.credits ?? 0,
+    balanceAfter: credits,
     note: "Voice consultation",
   });
 
-  return user;
+  return { ...user, credits };
 }
 
 export async function addCredits(
@@ -75,16 +93,17 @@ export async function addCredits(
     return null;
   }
 
+  const credits = asCredits(user.credits);
   await recordLedger({
     email,
     type: meta?.type ?? "purchase",
     amount,
-    balanceAfter: user.credits ?? 0,
+    balanceAfter: credits,
     reference: meta?.reference,
     note: meta?.note,
   });
 
-  return user;
+  return { ...user, credits };
 }
 
 export async function recordSignupCredits(

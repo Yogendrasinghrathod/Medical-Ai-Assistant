@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/src/db";
 import { PaymentOrdersTable } from "@/src/schema";
-import { addCredits } from "@/services/credits.service";
+import { addCredits, getCredits } from "@/services/credits.service";
 import { getRazorpayCredentials } from "@/lib/razorpay";
 
 function signaturesMatch(expectedHex: string, receivedHex: string) {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         status: "paid",
-        credits: order.credits,
+        credits: await getCredits(email),
         alreadyProcessed: true,
       });
     }
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       status: "paid",
-      credits: updatedUser?.credits,
+      credits: updatedUser?.credits ?? (await getCredits(email)),
     });
   } catch (error) {
     if (error instanceof Error && error.message === "PAYMENT_PROVIDER_MISCONFIGURED") {
