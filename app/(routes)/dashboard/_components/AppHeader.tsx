@@ -3,8 +3,9 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { Menu, Stethoscope, X } from "lucide-react";
+import { UserDetailsContext } from "@/context/UserDetailsContext";
 
 const menuOptions = [
   { id: 1, name: "Home", path: "/dashboard" },
@@ -16,6 +17,7 @@ const menuOptions = [
 function AppHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const credits = useContext(UserDetailsContext)?.usersDetail?.credits;
 
   const isActive = (path: string) =>
     path === "/dashboard" ? pathname === path : pathname.startsWith(path);
@@ -49,6 +51,14 @@ function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {typeof credits === "number" && (
+            <Link
+              href="/profile"
+              className="hidden rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground sm:inline-flex"
+            >
+              {credits} credits
+            </Link>
+          )}
           <UserButton />
           <button
             type="button"

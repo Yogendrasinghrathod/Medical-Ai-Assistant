@@ -19,6 +19,17 @@ export const SessionChatTable = pgTable("session_chat", {
   createdOn: timestamp().defaultNow().notNull(),
 });
 
+export const CreditLedgerTable = pgTable("credit_ledger", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  email: varchar({ length: 255 }).notNull(),
+  type: varchar({ length: 32 }).notNull(),
+  amount: integer().notNull(),
+  balanceAfter: integer().notNull(),
+  reference: varchar({ length: 255 }),
+  note: varchar({ length: 255 }),
+  createdOn: timestamp().defaultNow().notNull(),
+});
+
 export const PaymentOrdersTable = pgTable("payment_orders", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   internalOrderId: varchar({ length: 40 }).notNull().unique(),

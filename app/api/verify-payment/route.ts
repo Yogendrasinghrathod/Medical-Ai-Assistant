@@ -66,7 +66,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const updatedUser = await addCredits(email, order.credits);
+    const updatedUser = await addCredits(email, order.credits, {
+      type: "purchase",
+      reference: String(razorpay_payment_id),
+      note: `${order.packId} pack`,
+    });
     await db
       .update(PaymentOrdersTable)
       .set({
