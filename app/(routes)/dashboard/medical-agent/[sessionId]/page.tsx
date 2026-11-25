@@ -40,6 +40,7 @@ function MedicalVoiceAgent() {
   const [sessionDetails, setSessionDetails] = useState<SessionDetail>();
   const [callStarted, setCallStarted] = useState(false);
   const vapiRef = useRef<Vapi | null>(null);
+  const consultationAssistantIdRef = useRef<string>("");
   const [currentRole, setCurrentRole] = useState<string | null>();
   const [liveTranscirpt, setLiveTranscript] = useState<string>();
   const [messages, setMessages] = useState<messages[]>([]);
@@ -68,59 +69,81 @@ function MedicalVoiceAgent() {
     GetSessionDetails();
   }, [sessionId]);
 
-  // Initialize Vapi once
+  // Load Vapi from the server so Netlify runtime env vars work without a rebuild.
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
-    if (!apiKey) {
-      return;
-    }
+    let cancelled = false;
 
-    vapiRef.current = new Vapi(apiKey);
+    const initVapi = async () => {
+      try {
+        const config = await axios.get("/api/voice-config");
+        const apiKey = config.data?.vapiPublicKey as string | undefined;
+        consultationAssistantIdRef.current =
+          config.data?.consultationAssistantId || "";
+        if (!apiKey || cancelled) {
+          return;
+        }
 
-    // Set up event listeners once
-    vapiRef.current.on("call-start", () => {
-      setCallStarted(true);
-    });
+        vapiRef.current = new Vapi(apiKey);
 
-    vapiRef.current.on("call-end", () => {
-      setCallStarted(false);
-    });
+        vapiRef.current.on("call-start", () => {
+          setCallStarted(true);
+        });
 
-    vapiRef.current.on("message", (message: any) => {
-      if (message.type === "transcript") {
-        const { role, transcriptType, transcript } = message;
-        if (transcriptType == "partial") {
-          setLiveTranscript(transcript);
-          setCurrentRole(role);
-        } else if (transcriptType == "final") {
-          setMessages((prev: messages[]) => {
-            const next = [...prev, { role: role, text: transcript }];
-            const currentSessionId = sessionIdRef.current;
-            if (currentSessionId) {
-              axios
-                .put("/api/session-chat", {
-                  sessionId: currentSessionId,
-                  messages: next,
-                })
-                .catch(() => {});
+        vapiRef.current.on("call-end", () => {
+          setCallStarted(false);
+        });
+
+        vapiRef.current.on("error", (error: unknown) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Voice call failed. Check Vapi domain allowlist and assistant IDs.";
+          toast.error(message);
+        });
+
+        vapiRef.current.on("message", (message: any) => {
+          if (message.type === "transcript") {
+            const { role, transcriptType, transcript } = message;
+            if (transcriptType == "partial") {
+              setLiveTranscript(transcript);
+              setCurrentRole(role);
+            } else if (transcriptType == "final") {
+              setMessages((prev: messages[]) => {
+                const next = [...prev, { role: role, text: transcript }];
+                const currentSessionId = sessionIdRef.current;
+                if (currentSessionId) {
+                  axios
+                    .put("/api/session-chat", {
+                      sessionId: currentSessionId,
+                      messages: next,
+                    })
+                    .catch(() => {});
+                }
+                return next;
+              });
+              setLiveTranscript("");
+              setCurrentRole(null);
             }
-            return next;
-          });
-          setLiveTranscript("");
-          setCurrentRole(null);
+          }
+        });
+
+        vapiRef.current.on("speech-start", () => {
+          setCurrentRole("Assistant");
+        });
+        vapiRef.current.on("speech-end", () => {
+          setCurrentRole("User");
+        });
+      } catch {
+        if (!cancelled) {
+          toast.error("Could not load voice configuration.");
         }
       }
-    });
+    };
 
-    vapiRef.current.on("speech-start", () => {
-      setCurrentRole("Assistant");
-    });
-    vapiRef.current.on("speech-end", () => {
-      setCurrentRole("User");
-    });
+    void initVapi();
 
-    // Cleanup on unmount
     return () => {
+      cancelled = true;
       if (vapiRef.current) {
         vapiRef.current.stop();
         vapiRef.current = null;
@@ -134,9 +157,18 @@ function MedicalVoiceAgent() {
       alert("Voice Assistant ID is not configured");
       return;
     }
-    const sharedAssistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID_CONSULTATION;
+    const sharedAssistantId = consultationAssistantIdRef.current;
     const assistantId = sharedAssistantId || selectedDoctor.assistantId;
+    if (!assistantId) {
+      toast.error(
+        "Voice assistant ID is missing on this host. Add the NEXT_PUBLIC_ASSISTANT_ID_* variables in Netlify and redeploy."
+      );
+      return;
+    }
     if (!vapiRef.current) {
+      toast.error(
+        "Vapi is not configured on this host. Add NEXT_PUBLIC_VAPI_API_KEY in Netlify (available to functions) and redeploy."
+      );
       return;
     }
     try {
@@ -153,7 +185,7 @@ function MedicalVoiceAgent() {
         });
       }
 
-      vapiRef.current.start(assistantId, {
+      await vapiRef.current.start(assistantId, {
         variableValues: {
           doctorId: String(selectedDoctor.id),
           doctorName: selectedDoctor.specialist,
@@ -185,7 +217,16 @@ function MedicalVoiceAgent() {
         );
         return;
       }
-      toast.error("Failed to start call.");
+      if (axios.isAxiosError(error) && error.response?.status === 503) {
+        toast.error(
+          error.response.data?.message ||
+            "Voice calls cannot start because rate limiting is not configured on this host."
+        );
+        return;
+      }
+      toast.error(
+        error instanceof Error ? error.message : "Failed to start call."
+      );
     }
   };
 

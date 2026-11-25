@@ -17,10 +17,27 @@ export async function POST(req: Request) {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
-  const { success, reset, remaining } = await applyRateLimit(
-    startCallLimiter,
-    `start_call_${ip}`
-  );
+  let success: boolean;
+  let reset: number;
+  let remaining: number;
+  try {
+    const limited = await applyRateLimit(
+      startCallLimiter,
+      `start_call_${ip}`
+    );
+    success = limited.success;
+    reset = limited.reset;
+    remaining = limited.remaining;
+  } catch {
+    return NextResponse.json(
+      {
+        error: "Rate limiter unavailable",
+        message:
+          "Voice calls cannot start because Redis rate limiting is not configured on this host.",
+      },
+      { status: 503 }
+    );
+  }
 
   const payload = {
     message: `Only ${START_CALL_LIMIT} start calls are allowed in ${START_CALL_WINDOW_MINUTES} minutes.`,

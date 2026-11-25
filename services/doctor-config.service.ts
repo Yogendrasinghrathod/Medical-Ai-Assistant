@@ -1,3 +1,4 @@
+import { getAssistantIdForDoctor } from "@/lib/voice-env";
 import { AIDoctorAgents } from "@/shared/list";
 
 export type DoctorAgentRecord = (typeof AIDoctorAgents)[number];
@@ -47,14 +48,22 @@ export function resolveDoctorAgent(
     if (!Number.isNaN(numericId)) {
       const byId = AIDoctorAgents.find((entry) => entry.id === numericId);
       if (byId) {
-        return byId;
+        return withRuntimeAssistantId(byId);
       }
     }
   }
 
   if (specialist) {
-    return AIDoctorAgents.find((entry) => entry.specialist === specialist) ?? null;
+    const byName = AIDoctorAgents.find((entry) => entry.specialist === specialist);
+    return byName ? withRuntimeAssistantId(byName) : null;
   }
 
   return null;
+}
+
+function withRuntimeAssistantId(doctor: DoctorAgentRecord): DoctorAgentRecord {
+  return {
+    ...doctor,
+    assistantId: getAssistantIdForDoctor(doctor.id, doctor.assistantId),
+  };
 }
